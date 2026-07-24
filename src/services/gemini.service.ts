@@ -319,10 +319,16 @@ INSTRUCTIONS:
    * Non-streaming fallback for chat response
    */
   public async generateChatResponse(
+    contextSummary: string,
     messages: Array<{ sender: string; content: string }>,
     newMessage: string,
   ): Promise<ChatAssistantResult> {
-    return this.generateChatStream("", messages, newMessage, () => {});
+    return this.generateChatStream(
+      contextSummary,
+      messages,
+      newMessage,
+      () => {},
+    );
   }
 
   /* --- Fallback Implementations --- */

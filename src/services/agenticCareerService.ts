@@ -1,6 +1,7 @@
-import CareerRoadmap, { ICareerRoadmap } from '../models/CareerRoadmap';
-import { Types } from 'mongoose';
-import { geminiService } from './gemini.service';
+import CareerRoadmap, { ICareerRoadmap } from "../models/CareerRoadmap";
+import { Types } from "mongoose";
+import { geminiService } from "./gemini.service";
+import Resume from "../models/Resume";
 
 interface CareerRecommendationInput {
   userId: string;
@@ -9,15 +10,39 @@ interface CareerRecommendationInput {
   pacing?: string;
 }
 
-export const runAgenticCareerRecommender = async (input: CareerRecommendationInput): Promise<ICareerRoadmap> => {
-  const { userId, currentRole, targetRole, pacing = 'Standard (6 months)' } = input;
+export const runAgenticCareerRecommender = async (
+  input: CareerRecommendationInput,
+): Promise<ICareerRoadmap> => {
+  const {
+    userId,
+    currentRole,
+    targetRole,
+    pacing = "Standard (6 months)",
+  } = input;
 
   // 1. Fetch Previous Memory Context from DB
-  const pastRoadmap = await CareerRoadmap.findOne({ userId, targetRole }).sort({ createdAt: -1 });
-  const memoryContext = pastRoadmap?.memoryContext || {
-    previousSkillGaps: [],
+  const latestResume = await Resume.findOne({
+    userId,
+  }).sort({ createdAt: -1 });
+
+  const pastRoadmap = await CareerRoadmap.findOne({
+    userId,
+    targetRole,
+  }).sort({ createdAt: -1 });
+
+  const memoryContext = {
+    previousSkillGaps:
+      latestResume?.skillGap ||
+      pastRoadmap?.memoryContext?.previousSkillGaps ||
+      [],
+
+    extractedSkills: latestResume?.extractedSkills || [],
+
+    atsScore: latestResume?.atsScore || 0,
+
     preferredPacing: pacing,
-    lastEvaluationDate: new Date()
+
+    lastEvaluationDate: new Date(),
   };
 
   // 2. Execute Gemini Agentic AI Recommendation Engine with Memory
@@ -25,14 +50,20 @@ export const runAgenticCareerRecommender = async (input: CareerRecommendationInp
     currentRole,
     targetRole,
     pacing,
-    memoryContext
+    memoryContext,
   );
 
   // 3. Update Memory Context
   const updatedMemory = {
-    previousSkillGaps: geminiResult.updatedSkillGaps || ['Agentic AI', 'System Design'],
+    previousSkillGaps: geminiResult.updatedSkillGaps,
+
+    extractedSkills: latestResume?.extractedSkills || [],
+
+    atsScore: latestResume?.atsScore || 0,
+
     preferredPacing: pacing,
-    lastEvaluationDate: new Date()
+
+    lastEvaluationDate: new Date(),
   };
 
   // 4. Create MongoDB Record
@@ -43,7 +74,7 @@ export const runAgenticCareerRecommender = async (input: CareerRecommendationInp
     reasoningChain: geminiResult.reasoningChain,
     readinessScore: geminiResult.readinessScore,
     milestones: geminiResult.milestones,
-    memoryContext: updatedMemory
+    memoryContext: updatedMemory,
   });
 
   return newRoadmap;
